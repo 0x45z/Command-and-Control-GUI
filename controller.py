@@ -1,6 +1,8 @@
 import socket
 import threading
+import time
 import sys
+import ast
 
 
 class ClientHandler(threading.Thread):
@@ -66,7 +68,6 @@ class Server:
             sys.exit(0)
 
     def send_to_one(self, address, message):
-        print('address =', address)
         if address in self.clients:  # make sure client exists
             self.clients[address].send(message)  # send message using socket object
         else:
@@ -77,11 +78,173 @@ class Server:
     def remove_client(self, client):
         del self.clients[client]
 
-    def get_clients(self):
-        for key in self.clients.keys():
-            yield key
+
+def one_to_one_mode():
+    """
+    send one command to one client
+    """
+    while True:
+        try:
+            command = input("1-1$ ")
+            command = command.split(") ", 1)
+            addr = command[0]
+            if "exit" in addr:
+                break
+            message = command[1:]
+            addr += ")"
+            addr = ast.literal_eval(addr)  # turn string to tuple
+            message = "".join(message)  # turn list to string
+            message = bytes(message.encode('utf-8'))  # turn string to bytes
+            server.send_to_one(addr, message)  # send to client
+        except IndexError:
+            print('Invalid input')
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except SyntaxError:
+            # invalid input for ast.literal_eval so just pass
+            pass
+
+
+def many_to_one_mode():
+    """
+    Send multiple commands to one client
+    """
+    while True:
+        try:
+            command = input("m-1$ ")
+            command = command.split(") ", 1)
+            addr = command[0]
+            if "exit" in addr:
+                break
+            commands = command[1:]
+            commands = commands[0].split()
+            print(commands)
+            addr += ")"
+            addr = ast.literal_eval(addr)  # turn string to tuple
+            for command in commands:
+                server.send_to_one(addr, bytes(command.encode()))
+
+        except IndexError:
+            print('Invalid input')
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except SyntaxError:
+            # invalid input for ast.literal_eval so just pass
+            pass
+
+
+def one_to_many_mode():
+    """
+    One command is sent to many machines
+    """
+    while True:
+        try:
+            command = input("1-m$ ")
+            if "exit" in command:
+                break
+            command = command.split(") ")  # split at every closing bracket
+            addresses = []
+            instruction = ""
+            for item in command:
+                if item[0] == "(":
+                    # item is and address
+                    item += ")"  # add closing bracket
+                    addresses.append(item)  # put in address list
+                else:
+                    # item is command
+                    instruction = item
+
+            instruction = bytes(instruction.encode('utf-8'))
+
+            for addr in addresses:  # for every address selected
+                addr = ast.literal_eval(addr)  # turn string to tuple
+                server.send_to_one(addr, instruction)  # send instruction to address
+
+        except IndexError:
+            print('Invalid input')
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except SyntaxError:
+            # invalid input for ast.literal_eval so just pass
+            pass
+
+
+def many_to_many_mode():
+    """
+    many commands are sent to many machines. (All commands --> all machines)
+
+    e.g.
+
+    address1, address2, command, different_command
+
+    command --> address1
+
+    different_command --> address 1
+
+
+    command --> address2
+
+    different_command --> address 2
+    """
+
+    while True:
+        try:
+            command = input("m-m$ ")
+            if "exit" in command:
+                break
+            command = command.split(") ")  # split at every closing bracket
+            addresses = []
+            instruction = []
+            for item in command:
+                if item[0] == "(":
+                    # item is and address
+                    item += ")"  # add closing bracket
+                    addresses.append(item)  # put in address list
+                else:
+                    # item is command
+                    instruction.append(item)
+
+            instruction = instruction[0].split()
+
+            for addr in addresses:  # for every address selected
+                addr = ast.literal_eval(addr)  # turn string to tuple
+                for instr in instruction:
+                    server.send_to_one(addr, bytes(instr.encode('utf-8')))
+                    time.sleep(2)
+
+        except IndexError:
+            print('Invalid input')
+        except KeyboardInterrupt:
+            sys.exit(0)
+        except SyntaxError:
+            # invalid input for ast.literal_eval so just pass
+            pass
+
+
+def main():
+    # start a thread for server
+    server_thread = threading.Thread(target=server.listen)  # create a thread to listen for connections
+    server_thread.start()
+    time.sleep(0.3)  # give some time for threads to start
+
+    # accept user input
+
+    while True:
+        try:
+            command = input("$ ")
+            if "1-1" in command:
+                one_to_one_mode()  # one command --> one address
+            elif "m-1" in command:
+                many_to_one_mode()  # many commands --> one address
+            elif "1-m" in command:
+                one_to_many_mode()  # one command --> many addresses
+            elif "m-m" in command:
+                many_to_many_mode()  # many commands --> many addresses
+
+        except KeyboardInterrupt:
+            sys.exit(0)
 
 
 if __name__ == "__main__":
     server = Server("127.0.0.1", 6969, 2048)
-    server.listen()
+    main()
