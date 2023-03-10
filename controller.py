@@ -28,7 +28,7 @@ class ClientHandler(threading.Thread):
                 if recv_len < self.buffer:  # if received data is less than buffer, all data is received
                     break
             if message:
-                print(f"[+]{self.address} says: {message}")
+                print(f"[+]{self.address} says:\n{message}")
             if not message:
                 # Client has disconnected
                 print(f'Client [{self.address}] Disconnected')
@@ -72,8 +72,6 @@ class Server:
             self.clients[address].send(message)  # send message using socket object
         else:
             print(f"Client {address} does not exist")
-            for key in self.clients.keys():
-                print(key, type(key))
 
     def remove_client(self, client):
         del self.clients[client]
@@ -118,11 +116,11 @@ def many_to_one_mode():
                 break
             commands = command[1:]
             commands = commands[0].split()
-            print(commands)
             addr += ")"
             addr = ast.literal_eval(addr)  # turn string to tuple
             for command in commands:
                 server.send_to_one(addr, bytes(command.encode()))
+                time.sleep(0.15)
 
         except IndexError:
             print('Invalid input')
@@ -210,7 +208,7 @@ def many_to_many_mode():
                 addr = ast.literal_eval(addr)  # turn string to tuple
                 for instr in instruction:
                     server.send_to_one(addr, bytes(instr.encode('utf-8')))
-                    time.sleep(2)
+                    time.sleep(0.2)
 
         except IndexError:
             print('Invalid input')
