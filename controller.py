@@ -31,7 +31,7 @@ class ClientHandler(threading.Thread):
                 if recv_len < self.buffer:  # if received data is less than buffer, all data is received
                     break
             if message:
-                print(f"[+]{self.address} says:\n{message}")
+                print(f"\n[+]{self.address} says:\n{message}")
             if not message:
                 # Client has disconnected
                 print(f'Client [{self.address}] Disconnected')
@@ -100,98 +100,78 @@ class Server:
         return len(self.clients)
 
 
-def one_to_one_mode():
+def one_to_one_mode(command):
     """
     send one command to one client
     """
-    while True:
-        try:
-            command = input("1-1$ ")
-            command = command.split(") ", 1)
-            addr = command[0]
-            if "exit" in addr:
-                break
-            message = command[1:]
-            addr += ")"
-            addr = ast.literal_eval(addr)  # turn string to tuple
-            message = "".join(message)  # turn list to string
-            message = bytes(message.encode('utf-8'))  # turn string to bytes
-            server.send_to_one(addr, message)  # send to client
-        except IndexError:
-            print('Invalid input')
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except SyntaxError:
-            # invalid input for ast.literal_eval so just pass
-            pass
+
+    try:
+        command = command.split(") ", 1)
+        addr = command[0]
+        message = command[1:]
+        addr += ")"
+        addr = ast.literal_eval(addr)  # turn string to tuple
+        message = "".join(message)  # turn list to string
+        message = bytes(message.encode('utf-8'))  # turn string to bytes
+        server.send_to_one(addr, message)  # send to client
+    except IndexError:
+        print('Invalid input')
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except SyntaxError:
+        # invalid input for ast.literal_eval so just pass
+        pass
 
 
-def many_to_one_mode():
-    """
-    Send multiple commands to one client
-    """
-    while True:
-        try:
-            command = input("m-1$ ")
-            command = command.split(") ", 1)
-            addr = command[0]
-            if "exit" in addr:
-                break
-            commands = command[1:]
-            commands = commands[0].split()
-            print(commands)
-            addr += ")"
-            addr = ast.literal_eval(addr)  # turn string to tuple
-            for command in commands:
-                server.send_to_one(addr, bytes(command.encode()))
-                time.sleep(0.15)
-
-        except IndexError:
-            print('Invalid input')
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except SyntaxError:
-            # invalid input for ast.literal_eval so just pass
-            pass
+def multiple_one_to_ones(command):
+    commands = command.split(' ')  # split at every space
+    counter = 0
+    completed_commands = []
+    for i in range(len(commands)):
+        counter += 1
+        if counter == 3:  # each command is split into 3 elements when splitting at spaces
+            string = "".join(f"{commands[i - 2]} {commands[i - 1]} {commands[i]}")  # join elements together
+            completed_commands.append(string)  # append completed command to list
+            counter = 0  # reset counter
+    for command in completed_commands:
+        one_to_one_mode(command)
+        time.sleep(0.15)
 
 
-def one_to_many_mode():
+def one_to_many_mode(command):
     """
     One command is sent to many machines
     """
-    while True:
-        try:
-            command = input("1-m$ ")
-            if "exit" in command:
-                break
-            command = command.split(") ")  # split at every closing bracket
-            addresses = []
-            instruction = ""
-            for item in command:
-                if item[0] == "(":
-                    # item is and address
-                    item += ")"  # add closing bracket
-                    addresses.append(item)  # put in address list
-                else:
-                    # item is command
-                    instruction = item
 
-            instruction = bytes(instruction.encode('utf-8'))
+    try:
+        command = command.split(") ")  # split at every closing bracket
+        addresses = []
+        instruction = ""
+        for item in command:
+            if item[0] == "(":
+                # item is and address
+                item += ")"  # add closing bracket
+                addresses.append(item)  # put in address list
+            else:
+                # item is command
+                instruction = item
 
-            for addr in addresses:  # for every address selected
-                addr = ast.literal_eval(addr)  # turn string to tuple
-                server.send_to_one(addr, instruction)  # send instruction to address
+        instruction = bytes(instruction.encode('utf-8'))
 
-        except IndexError:
-            print('Invalid input')
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except SyntaxError:
-            # invalid input for ast.literal_eval so just pass
-            pass
+        for addr in addresses:  # for every address selected
+            addr = ast.literal_eval(addr)  # turn string to tuple
+            server.send_to_one(addr, instruction)  # send instruction to address
+
+    except IndexError:
+        print('Invalid input')
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except SyntaxError:
+        # invalid input for ast.literal_eval so just pass
+        pass
 
 
-def many_to_many_mode():
+def many_to_many_mode(command):
     """
     many commands are sent to many machines. (All commands --> all machines)
 
@@ -209,80 +189,142 @@ def many_to_many_mode():
     different_command --> address 2
     """
 
-    while True:
-        try:
-            command = input("m-m$ ")
-            if "exit" in command:
-                break
-            command = command.split(") ")  # split at every closing bracket
-            addresses = []
-            instruction = []
-            for item in command:
-                if item[0] == "(":
-                    # item is and address
-                    item += ")"  # add closing bracket
-                    addresses.append(item)  # put in address list
-                else:
-                    # item is command
-                    instruction.append(item)
+    try:
+        command = command.split(") ")  # split at every closing bracket
+        addresses = []
+        instruction = []
+        for item in command:
+            if item[0] == "(":
+                # item is and address
+                item += ")"  # add closing bracket
+                addresses.append(item)  # put in address list
+            else:
+                # item is command
+                instruction.append(item)
 
-            instruction = instruction[0].split()
+        instruction = instruction[0].split()
 
-            for addr in addresses:  # for every address selected
-                addr = ast.literal_eval(addr)  # turn string to tuple
-                for instr in instruction:
-                    server.send_to_one(addr, bytes(instr.encode('utf-8')))
-                    time.sleep(2)
+        for addr in addresses:  # for every address selected
+            addr = ast.literal_eval(addr)  # turn string to tuple
+            for instr in instruction:
+                server.send_to_one(addr, bytes(instr.encode('utf-8')))
+                time.sleep(2)
 
-        except IndexError:
-            print('Invalid input')
-        except KeyboardInterrupt:
-            sys.exit(0)
-        except SyntaxError:
-            # invalid input for ast.literal_eval so just pass
-            pass
+    except IndexError:
+        print('Invalid input')
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except SyntaxError:
+        # invalid input for ast.literal_eval so just pass
+        pass
 
 
 class App:
     def __init__(self, master):
         self.master = master
+        self.master.title("Controller")  # set window title
+        self.master.resizable(False, False)  # window cant be resized
+        self.buttons = []  # client buttons list
+        self.selected_commands = []  # commands selected by user
+        self.selected_clients = []  # clients selected by user
+        self.highlighted_clients = {}  # a dictionary to represent if a client button is highlighted
+        self.verbose_command = ""
+        self.real_command = ""
+        self.command_mode = ""
 
-        # create a left frame with two columns
+        # Left frame
+
         self.left_frame = tk.Frame(self.master)
         self.left_frame.grid(row=0, column=0, rowspan=2, padx=10, pady=10, sticky="nsew")
         self.left_frame.columnconfigure(0, weight=1)
         self.left_frame.columnconfigure(1, weight=1)
 
-        self.buttons = []  # client buttons list
-
         # command buttons
-        self.button2 = tk.Button(self.left_frame, text="Get Processes")
-        self.button2.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        self.proc_button = tk.Button(self.left_frame, text="Get Processes", command=self.proc_button_click)
+        self.proc_button.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        self.pbh = False  # proc button not highlighted
 
-        self.button3 = tk.Button(self.left_frame, text="Get Network Info")
-        self.button3.grid(row=1, column=1, padx=5, pady=5, sticky="nsew")
+        self.net_button = tk.Button(self.left_frame, text="Get Network Info", command=self.net_button_click)
+        self.net_button.grid(row=1, column=1, padx=5, pady=5, sticky="nsew")
+        self.nbh = False  # net button not highlighted
 
-        self.button4 = tk.Button(self.left_frame, text="Get Users")
-        self.button4.grid(row=2, column=1, padx=5, pady=5, sticky="nsew")
+        self.users_button = tk.Button(self.left_frame, text="Get Users", command=self.users_button_click)
+        self.users_button.grid(row=2, column=1, padx=5, pady=5, sticky="nsew")
+        self.ubh = False  # users button not highlighted
 
-        # create a canvas and text widget in the right frame
+        # Right frame
+
         self.right_frame = tk.Frame(self.master)
         self.right_frame.grid(row=0, column=1, rowspan=2, padx=10, pady=10, sticky="nsew")
         self.right_frame.columnconfigure(0, weight=1)
         self.right_frame.rowconfigure(1, weight=1)
 
-        self.canvas = tk.Canvas(self.right_frame, width=600, height=400, bg="white")
+        self.canvas = tk.Canvas(self.right_frame, width=800, height=600, bg="white")
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
-        self.text_widget = tk.Text(self.right_frame, width=40, height=10)
+        self.text_widget = tk.Text(self.right_frame, width=40, height=40)
         self.text_widget.grid(row=0, column=0, sticky="nsew")
 
-        # set the text widget to redirect stdout to the widget
         self.text_widget.tag_configure("stdout", foreground="black")
-        sys.stdout = StdoutWriter(self.text_widget, "stdout")
+        sys.stdout = StdoutWriter(self.text_widget, "stdout")  # redirect stdout to text widget
+
+        # Third frame
+
+        self.third_frame = tk.Frame(self.master)
+        self.third_frame.grid(row=0, column=2, rowspan=2, padx=10, pady=10, sticky="nsew")
+        self.third_frame.columnconfigure(0, weight=1)
+        self.third_frame.columnconfigure(1, weight=1)
+        self.third_frame.rowconfigure(1, weight=1)
+
+        self.execute_button = tk.Button(self.third_frame, text="Execute", fg="green",
+                                        command=self.send_commands)
+        self.execute_button.grid(row=2, column=0, padx=5, pady=5, sticky="nsew")
+
+        self.command_canvas = tk.Canvas(self.third_frame, width=200, height=300, bg="white")
+        self.command_canvas.grid(row=0, column=0, sticky="nsew")
+
+        self.command_widget = tk.Text(self.third_frame, width=40, height=10)
+        self.command_widget.grid(row=0, column=0, sticky="nsew")
 
         # set the closing event to run the on_closing function
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def display_on_command_widget(self, msg):
+        self.command_widget.delete("1.0", tk.END)  # clear text widget
+        self.command_widget.insert(tk.END, msg)  # write message to end of text widget
+
+    def proc_button_click(self):
+        if not self.pbh:  # clicked for first time (add command)
+            self.proc_button.configure(relief=tk.SUNKEN)  # press
+            self.pbh = True
+            self.selected_commands.append('get_processes')
+        else:  # clicked for second time (remove command)
+            self.proc_button.configure(relief=tk.RAISED)  # un-press
+            self.pbh = False
+            self.selected_commands.remove('get_processes')
+        self.process_commands_to_clients()  # process and show user commands --> client info
+
+    def net_button_click(self):
+        if not self.nbh:  # clicked for first time (add command)
+            self.net_button.configure(relief=tk.SUNKEN)  # press
+            self.nbh = True
+            self.selected_commands.append('get_network')
+        else:  # clicked for second time (remove command)
+            self.net_button.configure(relief=tk.RAISED)  # un-press
+            self.nbh = False
+            self.selected_commands.remove('get_network')
+        self.process_commands_to_clients()  # process and show user commands --> client info
+
+    def users_button_click(self):
+        if not self.ubh:  # clicked for first time (add command)
+            self.users_button.configure(relief=tk.SUNKEN)  # press
+            self.ubh = True
+            self.selected_commands.append('get_users')
+        else:  # clicked for second time (remove command)
+            self.users_button.configure(relief=tk.RAISED)  # un-press
+            self.ubh = False
+            self.selected_commands.remove('get_users')
+        self.process_commands_to_clients()  # process and show user commands --> client info
 
     def on_closing(self):
         sys.stdout = sys.__stdout__  # restore stdout
@@ -290,10 +332,12 @@ class App:
 
     def create_client_button(self, name):
         name = "".join(f"{name[0]}:{name[1]}")  # format client name to ip:port
-        button = tk.Button(self.left_frame, text=str(name))  # create client button
+        button = tk.Button(self.left_frame, text=str(name), command=lambda: self.client_button_click(button))  # create
+        # client button
         row_num = server.num_client() - 1  # get correct row based on number of connected clients
         button.grid(row=row_num, column=0, padx=5, pady=5, sticky="nsew")  # set it in correct place
         self.buttons.append(button)  # add button to buttons list
+        self.highlighted_clients[button] = False  # add to dict that client button is not highlighted
 
     def remove_client_button(self, button):
         # remove a client button
@@ -305,6 +349,88 @@ class App:
             # make the row of the button that of the index of the button in the list
             self.buttons[i].grid(row=i, column=0, padx=5, pady=5, sticky="nsew")
 
+    def client_button_click(self, button):
+        if not self.highlighted_clients[button]:
+            # append client address to selected clients list when their button is pressed
+            addr_list = list(server.clients.keys())  # get addresses of clients
+            index = self.buttons.index(button)  # get the index of button in button list (this will be the same as index
+            # in client list)
+            addr = addr_list[index]  # get address using index from addresses in server.clients
+            self.selected_clients.append(addr)  # append address to list
+            button.configure(relief=tk.SUNKEN)  # sink button
+            self.highlighted_clients[button] = True  # button is highlighted (sunk)
+        else:
+            # remove client address from selected clients list when their button is unpressed
+            addr_list = list(server.clients.keys())  # get addresses of clients
+            index = self.buttons.index(button)  # get the index of button in button list (this will be the same as index
+            # in client list)
+            addr = addr_list[index]  # get address using index from addresses in server.clients
+            self.selected_clients.remove(addr)
+            button.configure(relief=tk.RAISED)  # raise button
+            self.highlighted_clients[button] = False  # button is not highlighted (sunk)
+        self.process_commands_to_clients()  # process and show user commands --> client info
+
+    def process_commands_to_clients(self):
+        # either 1 command to multiple clients or multiple commands to multiple clients as 1-1 or all-all
+        self.verbose_command = ""  # clear
+        self.real_command = ""  # clear
+
+        if len(self.selected_commands) == 1:
+            # 1 to ?
+            if len(self.selected_clients) == 1:
+                self.command_mode = "1-1"  # set command 1 to 1
+            else:
+                self.command_mode = "1-m"  # set command mode to 1 to multiple
+            self.verbose_command += f"{self.selected_commands[0]}:"
+            for client in self.selected_clients:
+                self.real_command += f"{client} "  # add clients to real command
+                client = "".join(f"{client[0]}:{client[1]}")
+                self.verbose_command += f"\n    --> {client}"
+            self.real_command += f"{self.selected_commands[0]}"  # add command to real command
+
+        elif len(self.selected_commands) > 1:
+            # multiple commands to multiple clients
+            if len(self.selected_commands) == len(self.selected_clients):  # if there are same num of cmds and clients
+                # multiple 1 --> 1 's e.g. get_proc --> 1, get_users --> 2 etc.
+                # command is sent to the corresponding client of the same index (aka order in which they were clicked)
+                self.command_mode = "m1-1"
+                for i in range(len(self.selected_clients)):
+                    client = "".join(f"{self.selected_clients[i][0]}:{self.selected_clients[i][1]}")  # format addr
+                    self.verbose_command += f"{self.selected_commands[i]} --> {client}\n"
+                    self.real_command += f"{self.selected_clients[i]} {self.selected_commands[i]} "  # add to real cmd
+
+            else:
+                # all --> all e.g. get_proc --> 1 and 2, get_users --> 1 and 2 etc.
+                # all commands will be executed by all clients
+                self.command_mode = "m-m"
+                for command in self.selected_commands:
+                    self.verbose_command += f"{command}:\n"
+                    for client in self.selected_clients:
+                        formatted_client = "".join(f"{client[0]}:{client[1]}")  # format addr
+                        self.verbose_command += f"    --> {formatted_client}\n"
+
+                for client in self.selected_clients:
+                    self.real_command += f"{client} "
+                for command in self.selected_commands:
+                    self.real_command += f"{command} "
+
+        self.display_on_command_widget(self.verbose_command)  # display on command widget
+        print(f"\n{self.real_command}")
+
+    def send_commands(self):
+        # pass the command to the correct send function
+        if self.command_mode == "1-m":
+            # 1 command to many clients
+            one_to_many_mode(self.real_command)
+        elif self.command_mode == "m1-1":
+            # multiple 1 to 1's
+            multiple_one_to_ones(self.real_command)
+        elif self.command_mode == "m-m":
+            # many to many
+            many_to_many_mode(self.real_command)
+        elif self.command_mode == "1-1":
+            one_to_one_mode(self.real_command)
+
 
 class StdoutWriter:
     def __init__(self, text_widget, tag):
@@ -315,6 +441,7 @@ class StdoutWriter:
         # write stdout into tkinter widget
         self.text_widget.configure(state="normal")
         self.text_widget.insert("end", msg, (self.tag,))
+        self.text_widget.see("end")  # automatically scroll to end
         self.text_widget.configure(state="disabled")
 
 
