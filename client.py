@@ -152,6 +152,11 @@ class Shell(Enumerate):
         except KeyboardInterrupt:
             self.socket.close()
             sys.exit(0)
+        except ConnectionResetError:
+            # Lost connection with server, attempt to re-establish connection
+            self.socket.close()  # close socket
+            self.__init__(self.ip, self.port, self.buffer)  # recreate socket
+            self.connect()  # attempt to reconnect
 
     def send(self, message):
         self.socket.sendall(bytes(message, "utf-8"))
