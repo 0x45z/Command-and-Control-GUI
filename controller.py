@@ -4,57 +4,71 @@ import time
 import sys
 import ast
 import tkinter as tk
+from tkinter import messagebox
 
 print_lock = threading.Lock()
+
+
+def safe_print(msg):
+    with print_lock:
+        print(msg)
 
 
 class ClientHandler(threading.Thread):
     def __init__(self, socket, address, buffer):
         threading.Thread.__init__(self)
         self.socket = socket
+        self.socket.settimeout(2)
         self.address = address
         self.buffer = buffer
+        self.running = True
 
     def run(self):
         # Listen for messages from client
-
-        while True:
-            recv_len = 1
-            message = ''
-            while recv_len:
-                data = self.socket.recv(self.buffer)  # receive data
-                if not data:
+        while self.running:
+            try:
+                recv_len = 1
+                message = ''
+                while recv_len:
+                    data = self.socket.recv(self.buffer)  # receive data
+                    if not data:
+                        # Client has disconnected
+                        break
+                    recv_len = len(data)  # get the length of the data
+                    message += data.decode('utf-8')  # append the received data to message string
+                    if recv_len < self.buffer:  # if received data is less than buffer, all data is received
+                        break
+                if message:
+                    safe_print(f"\n[+]{self.address} says:\n{message}")
+                if not message:
                     # Client has disconnected
-                    break
-                recv_len = len(data)  # get the length of the data
-                message += data.decode('utf-8')  # append the received data to message string
-                if recv_len < self.buffer:  # if received data is less than buffer, all data is received
-                    break
-            if message:
-                print(f"\n[+]{self.address} says:\n{message}")
-            if not message:
-                # Client has disconnected
-                print(f'Client [{self.address}] Disconnected')
+                    safe_print(f'Client [{self.address}] Disconnected')
 
-                # get index in dict of client as this will be the index of the button that needs to be removed
-                address_list = list(server.clients.keys())
-                index = address_list.index(self.address)
+                    # get index in dict of client as this will be the index of the button that needs to be removed
+                    address_list = list(server.clients.keys())
+                    index = address_list.index(self.address)
 
-                # remove the button at that index in list
-                button_to_remove = app.buttons[index]
-                app.remove_client_button(button_to_remove)
+                    # remove the button at that index in list
+                    button_to_remove = app.buttons[index]
+                    app.remove_client_button(button_to_remove)
 
-                # adjust the position of all other buttons
-                app.adjust_client_button_positions()
+                    # adjust the position of all other buttons
+                    app.adjust_client_button_positions()
 
-                server.remove_client(self.address)  # remove client from dict
-                with print_lock:
-                    print(f"Clients Connected: {server.num_client()}")
-                self.socket.close()  # close socket
-                break  # break out of while loop
+                    server.remove_client(self.address)  # remove client from dict
+
+                    safe_print(f"Clients Connected: {server.num_client()}")
+                    self.socket.close()  # close socket
+                    break  # break out of while loop
+            except socket.timeout:
+                # socket time out (needed to stop thread)
+                continue
 
     def send(self, message):
         self.socket.sendall(message.encode('utf-8'))
+
+    def stop(self):
+        self.running = False
 
 
 class Server:
@@ -64,22 +78,35 @@ class Server:
         self.buffer = buffer
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # release socket after closed
+        self.socket.settimeout(1)
         self.socket.bind((self.ip, self.port))
         self.clients = {}
+        self.running = True
+        self.stop_event = threading.Event()  # object to stop thread
+        self.threads = []
 
     def listen(self):
         self.socket.listen(20)
-        print(f"[+] Server Listening on {self.ip}:{self.port}")
+        safe_print(f"[+] Server Listening on {self.ip}:{self.port}")
 
         try:
-            while True:
-                conn, address = self.socket.accept()
-                print(f'Connection from {address}')
-                client_thread = ClientHandler(conn, address, self.buffer)  # create a thread to handle individual client
-                self.clients[address] = conn  # add the socket object to a dictionary with client address as key
-                client_thread.start()
-                print(f"Clients Connected: {len(self.clients)}")
-                app.create_client_button(address)
+            while self.running:
+                try:
+                    conn, address = self.socket.accept()
+                    safe_print(f'Connection from {address}')
+                    client_thread = ClientHandler(conn, address, self.buffer)  # create a thread to handle individual
+                    # client
+                    self.clients[address] = conn  # add the socket object to a dictionary with client address as key
+                    client_thread.start()
+                    self.threads.append(client_thread)
+                    safe_print(f"Clients Connected: {len(self.clients)}")
+                    app.create_client_button(address)
+                except socket.timeout:
+                    # continue looping if socket times out (needed to terminate thread)
+                    continue
+                except OSError:
+                    # socket has been closed because stop() has been called
+                    break
 
         except KeyboardInterrupt:
             self.socket.close()
@@ -89,15 +116,25 @@ class Server:
         if address in self.clients:  # make sure client exists
             self.clients[address].send(message)  # send message using socket object
         else:
-            print(f"Client {address} does not exist")
-            for key in self.clients.keys():
-                print(key, type(key))
+            safe_print(f"Client {address} does not exist")
 
     def remove_client(self, client):
         del self.clients[client]
 
     def num_client(self):
         return len(self.clients)
+
+    def get_clients(self):
+        return list(self.clients.keys())
+
+    def stop(self):
+        self.running = False
+        self.stop_event.set()  # signal thread to stop
+        self.socket.close()  # close socket
+        # stop all client handler threads
+        for thread in self.threads:
+            thread.stop()  # have the thread call the stop function
+            thread.join()  # wait for thread to terminate
 
 
 def one_to_one_mode(command):
@@ -115,7 +152,7 @@ def one_to_one_mode(command):
         message = bytes(message.encode('utf-8'))  # turn string to bytes
         server.send_to_one(addr, message)  # send to client
     except IndexError:
-        print('Invalid input')
+        safe_print('Invalid input')
     except KeyboardInterrupt:
         sys.exit(0)
     except SyntaxError:
@@ -163,7 +200,7 @@ def one_to_many_mode(command):
             server.send_to_one(addr, instruction)  # send instruction to address
 
     except IndexError:
-        print('Invalid input')
+        safe_print('Invalid input')
     except KeyboardInterrupt:
         sys.exit(0)
     except SyntaxError:
@@ -211,7 +248,7 @@ def many_to_many_mode(command):
                 time.sleep(2)
 
     except IndexError:
-        print('Invalid input')
+        safe_print('Invalid input')
     except KeyboardInterrupt:
         sys.exit(0)
     except SyntaxError:
@@ -222,8 +259,8 @@ def many_to_many_mode(command):
 class App:
     def __init__(self, master):
         self.master = master
-        self.master.title("Controller")  # set window title
-        self.master.resizable(False, False)  # window cant be resized
+        self.master.title("Controller")
+        self.master.resizable(False, False)
         self.buttons = []  # client buttons list
         self.selected_commands = []  # commands selected by user
         self.selected_clients = []  # clients selected by user
@@ -259,14 +296,21 @@ class App:
         self.right_frame.columnconfigure(0, weight=1)
         self.right_frame.rowconfigure(1, weight=1)
 
+        # canvas
         self.canvas = tk.Canvas(self.right_frame, width=800, height=600, bg="white")
         self.canvas.grid(row=0, column=0, sticky="nsew")
 
+        # text widget to display output
         self.text_widget = tk.Text(self.right_frame, width=40, height=40)
         self.text_widget.grid(row=0, column=0, sticky="nsew")
-
         self.text_widget.tag_configure("stdout", foreground="black")
         sys.stdout = StdoutWriter(self.text_widget, "stdout")  # redirect stdout to text widget
+
+        # scroll bar for text widget
+        self.scrollbar = tk.Scrollbar(self.right_frame)
+        self.scrollbar.grid(row=0, column=1, sticky="ns")
+        self.text_widget.config(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.config(command=self.text_widget.yview)
 
         # Third frame
 
@@ -276,22 +320,97 @@ class App:
         self.third_frame.columnconfigure(1, weight=1)
         self.third_frame.rowconfigure(1, weight=1)
 
+        # execute button
         self.execute_button = tk.Button(self.third_frame, text="Execute", fg="green",
                                         command=self.send_commands)
-        self.execute_button.grid(row=2, column=0, padx=5, pady=5, sticky="nsew")
+        self.execute_button.grid(row=4, column=0, padx=5, pady=5, sticky="nsew")
 
+        # clear output button
+        self.clear_button = tk.Button(self.third_frame, text="Clear Output", fg="red", command=self.clear_output)
+        self.clear_button.grid(row=3, column=0, padx=5, pady=5, sticky="nsew")
+
+        # command output
         self.command_canvas = tk.Canvas(self.third_frame, width=200, height=300, bg="white")
         self.command_canvas.grid(row=0, column=0, sticky="nsew")
 
         self.command_widget = tk.Text(self.third_frame, width=40, height=10)
         self.command_widget.grid(row=0, column=0, sticky="nsew")
+        self.command_widget.config(state="disabled")
+
+        # ip entry form
+        self.ip_entry = tk.Entry(self.third_frame, width=10)
+        self.ip_entry.grid(row=2, column=0, sticky="ew")
+
+        # port entry form
+        self.port_entry = tk.Entry(self.third_frame, width=10)
+        self.port_entry.grid(row=2, column=1, sticky="ew")
+
+        # set address button
+        self.set_address_button = tk.Button(self.third_frame, text="Set", command=self.set_address)
+        self.set_address_button.grid(row=2, column=2, sticky='ew')
 
         # set the closing event to run the on_closing function
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+    def set_address(self):
+        # read inputs and perform error checking
+        try:
+            ip = self.ip_entry.get()  # get ip
+            port = int(self.port_entry.get())  # get port
+            test_server = Server(ip, port, 2048)
+
+        except ValueError:
+            # port is not a number
+            messagebox.showerror('Error', 'Port is not a number')
+            return
+        except socket.gaierror:
+            # invalid IP
+            messagebox.showerror('Error', 'Invalid IP')
+            return
+        except OverflowError:
+            # invalid port number 0-65535
+            messagebox.showerror('Error', 'Invalid port number')
+            return
+        except OSError:
+            # cannot assign address
+            messagebox.showerror('Error', 'Cannot assign address')
+            return
+
+        del test_server
+
+        # use global vars
+        global server
+        global server_thread
+
+        # stop all threads
+        server.stop()  # stop server thread
+        server_thread.join()  # wait for it to finish
+
+        # remove client buttons
+        while self.buttons:
+            for button in self.buttons:
+                self.remove_client_button(button)  # remove all client buttons
+
+        # clear output
+        self.clear_output()  # clear screen output
+        self.display_on_command_widget('')  # clear command output
+
+        # set new address
+        server = Server(ip, port, 2048)  # change server address
+        server_thread = threading.Thread(target=server.listen)
+
+        server_thread.start()  # restart server thread
+
+    def clear_output(self):
+        self.text_widget.config(state="normal")  # set state to normal so it can be edited
+        self.text_widget.delete("1.0", "end")  # clear
+        self.text_widget.config(state="disabled")  # set state back to disabled
+
     def display_on_command_widget(self, msg):
-        self.command_widget.delete("1.0", tk.END)  # clear text widget
-        self.command_widget.insert(tk.END, msg)  # write message to end of text widget
+        self.command_widget.config(state="normal")  # set state to normal so it can be edited
+        self.command_widget.delete("1.0", tk.END)  # clear
+        self.command_widget.insert(tk.END, msg)  # insert message
+        self.command_widget.config(state="disabled")  # disable interaction
 
     def proc_button_click(self):
         if not self.pbh:  # clicked for first time (add command)
@@ -329,6 +448,11 @@ class App:
     def on_closing(self):
         sys.stdout = sys.__stdout__  # restore stdout
         self.master.destroy()  # close window
+
+        # stop all threads
+        server.stop()  # stop server thread
+        server_thread.join()  # wait for it to finish
+        sys.exit(0)
 
     def create_client_button(self, name):
         name = "".join(f"{name[0]}:{name[1]}")  # format client name to ip:port
@@ -415,7 +539,6 @@ class App:
                     self.real_command += f"{command} "
 
         self.display_on_command_widget(self.verbose_command)  # display on command widget
-        print(f"\n{self.real_command}")
 
     def send_commands(self):
         # pass the command to the correct send function
