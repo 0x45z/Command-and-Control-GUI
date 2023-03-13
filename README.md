@@ -89,7 +89,7 @@ The commands that will be sent to each client will appear on the right.
 ![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/command_widget.png)
 
 
-The address of the controller can be changed by entering the IP followed by the port number in the respective input boxes, then clicking set
+The address of the controller can be changed by entering the IP followed by the port number in the respective input boxes, then clicking set.
 
 ![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/address_box.png)
 
