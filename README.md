@@ -47,5 +47,51 @@ Connect to custom controller address:
 
 
 ## Controller Usage
+![](images/gui)
+
+The buttons on the left side of the applications 
+are commands that can be issued to clients:
+
+![](images/command_buttons)
+
+    Get Processes
+    Get Network Info
+    Get Users
+    Terminate
+
+
+Get Processes returns a list of running processes.
+
+
+
+Get Network Info returns network information such as local IP and default gateway.
+
+Get Users returns user information (Linux only).
+
+Terminate will close the clients application.
+
+
+When users connect, buttons will appear to the left of these with the clients addresses, aswell as in the output area in the center of the screen. 
+
+![](images/connected_clients)
+
+To send a command, click the client button then the command(s) you want to send, then click execute in the bottom right hand corner. 
+
+
+If you want to send a command to multiple clients, click the the command and then all the clients you want to send to. (The order is irrelevant).
+
+
+If you want to send a different command to each connected client, click the command followed by the client you want to send it to.
+
+The commands that will be sent to each client will appear on the right.
+![](images/command_widget)
+
+
+The address of the controller can be changed by entering the IP followed by the port number in the respective input boxes, then clicking set
+
+![](images/address_box)
+
+
+
 
 
