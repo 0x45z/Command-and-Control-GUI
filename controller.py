@@ -39,10 +39,10 @@ class ClientHandler(threading.Thread):
                     if recv_len < self.buffer:  # if received data is less than buffer, all data is received
                         break
                 if message:
-                    safe_print(f"\n[+]{self.address} says:\n{message}")
+                    safe_print(f"\n[+] {self.address[0]}:{self.address[1]} says:\n{message}")
                 if not message:
                     # Client has disconnected
-                    safe_print(f'Client [{self.address}] Disconnected')
+                    safe_print(f'Client {self.address[0]}:{self.address[1]} Disconnected')
 
                     # get index in dict of client as this will be the index of the button that needs to be removed
                     address_list = list(server.clients.keys())
@@ -56,6 +56,14 @@ class ClientHandler(threading.Thread):
                     app.adjust_client_button_positions()
 
                     server.remove_client(self.address)  # remove client from dict
+
+                    try:
+                        app.selected_clients.remove(self.address)  # remove client from selected address list
+                        app.process_commands_to_clients()  # update command widget so that disconnected client isn't
+                        # shown
+                    except ValueError:
+                        # client not in list so just pass
+                        pass
 
                     safe_print(f"Clients Connected: {server.num_client()}")
                     self.socket.close()  # close socket
@@ -93,7 +101,7 @@ class Server:
             while self.running:
                 try:
                     conn, address = self.socket.accept()
-                    safe_print(f'Connection from {address}')
+                    safe_print(f'Connection from {address[0]}:{address[1]}')
                     client_thread = ClientHandler(conn, address, self.buffer)  # create a thread to handle individual
                     # client
                     self.clients[address] = conn  # add the socket object to a dictionary with client address as key
@@ -116,7 +124,7 @@ class Server:
         if address in self.clients:  # make sure client exists
             self.clients[address].send(message)  # send message using socket object
         else:
-            safe_print(f"Client {address} does not exist")
+            safe_print(f"Client {address[0]}:{address[1]} does not exist")
 
     def remove_client(self, client):
         del self.clients[client]
@@ -289,6 +297,10 @@ class App:
         self.users_button.grid(row=2, column=1, padx=5, pady=5, sticky="nsew")
         self.ubh = False  # users button not highlighted
 
+        self.terminate_button = tk.Button(self.left_frame, text="Terminate", command=self.terminate_button_click)
+        self.terminate_button.grid(row=3, column=1, padx=5, pady=5, sticky="nsew")
+        self.tbh = False  # button is not highlighted
+
         # Right frame
 
         self.right_frame = tk.Frame(self.master)
@@ -353,7 +365,8 @@ class App:
         self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def set_address(self):
-        # read inputs and perform error checking
+
+        # read inputs and error checking
         try:
             ip = self.ip_entry.get()  # get ip
             port = int(self.port_entry.get())  # get port
@@ -444,6 +457,17 @@ class App:
             self.ubh = False
             self.selected_commands.remove('get_users')
         self.process_commands_to_clients()  # process and show user commands --> client info
+
+    def terminate_button_click(self):
+        if not self.tbh:  # clicked for first time (add command)
+            self.terminate_button.configure(relief=tk.SUNKEN)  # press
+            self.tbh = True
+            self.selected_commands.append('terminate')
+        else:  # clicked for second time (remove command)
+            self.terminate_button.configure(relief=tk.RAISED)
+            self.tbh = False
+            self.selected_commands.remove('terminate')
+        self.process_commands_to_clients()
 
     def on_closing(self):
         sys.stdout = sys.__stdout__  # restore stdout
@@ -569,7 +593,7 @@ class StdoutWriter:
 
 
 if __name__ == "__main__":
-    server = Server("127.0.0.1", 6969, 2048)
+    server = Server("127.0.0.1", 1234, 2048)
     root = tk.Tk()
     app = App(root)
     server_thread = threading.Thread(target=server.listen)  # create a thread to listen for connections
