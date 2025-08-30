@@ -47,12 +47,12 @@ Connect to custom controller address:
 
 
 ## Controller Usage
-![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/gui.png)
+![](images/gui.png)
 
 The buttons on the left side of the applications 
 are commands that can be issued to clients:
 
-![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/command_buttons.png)
+![](images/command_buttons.png)
 
     Get Processes
     Get Network Info
@@ -61,8 +61,6 @@ are commands that can be issued to clients:
 
 
 Get Processes returns a list of running processes.
-
-
 
 Get Network Info returns network information such as local IP and default gateway.
 
@@ -73,7 +71,7 @@ Terminate will close the clients application.
 
 When users connect, buttons will appear to the left of these with the clients addresses, aswell as in the output area in the center of the screen. 
 
-![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/connected_clients.png)
+![](images/connected_clients.png)
 
 To send a command, click the client button then the command(s) you want to send, then click execute in the bottom right hand corner. 
 
@@ -86,14 +84,10 @@ If you want to send a different command to each connected client, click the comm
 The commands that will be sent to each client will appear on the right.
 
 
-![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/command_widget.png)
+![](images/command_widget.png)
 
 
 The address of the controller can be changed by entering the IP followed by the port number in the respective input boxes, then clicking set.
 
-![](https://github.coventry.ac.uk/5062CEM/11006301_CW2/blob/main/images/address_box.png)
-
-
-
-
+![](images/address_box.png)
 
